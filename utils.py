@@ -78,3 +78,11 @@ def simulatePlanarScene(num_planes=5, num_point_per_plane=100, point_noise_std=0
 
     return points, point_associations, normal_associations, np.linalg.inv(trans)
 
+
+
+
+
+def skewSymmetric(v):
+    return np.array([[0, -v[2], v[1]],
+                     [v[2], 0, -v[0]],
+                     [-v[1], v[0], 0]])
