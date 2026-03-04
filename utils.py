@@ -1,7 +1,10 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from scipy.optimize import least_squares
+from scipy.spatial import KDTree
 
+
+kNumOfSigmasForBounds = 3.0
 
 def pointToPlaneRegistration(points, point_associations, normal_associations, max_iterations=100, tolerance=1e-6):
     # Initialize transformation
@@ -23,10 +26,16 @@ def pointToPlaneRegistration(points, point_associations, normal_associations, ma
     pose[:3, 3] = final_pos
     return pose
 
+def normalToNornalResiduals(n1, n2, rotation):
+    res_1 = rotation @ n1 - n2
+    res_2 = rotation @ n1 + n2
+    if np.linalg.norm(res_1) < np.linalg.norm(res_2):
+        return res_1
+    else:
+        return res_2
 
 
 def simulatePlanarScene(num_planes=5, num_point_per_plane=100, point_noise_std=0.03, normal_angle_noise_std=3.0, seed=42):
-    np.random.seed(42)
 
     plane_eqs = []
     for _ in range(num_planes):
@@ -86,3 +95,73 @@ def skewSymmetric(v):
     return np.array([[0, -v[2], v[1]],
                      [v[2], 0, -v[0]],
                      [-v[1], v[0], 0]])
+
+
+def pointsToNormalAndBounds(points, point_stdevs = [0.03]*3):
+    v1 = points[1] - points[0]
+    v2 = points[2] - points[0]
+    normal = np.cross(v1, v2)
+    normal_norm = np.linalg.norm(normal)
+    normal_unit = normal / np.linalg.norm(normal)
+
+    d_normal_d_point_0 = skewSymmetric(points[2] - points[1])
+    d_normal_d_point_1 = -skewSymmetric(v2)
+    d_normal_d_point_2 = skewSymmetric(v1)
+
+    d_normal_d_points = np.zeros((3, 9))
+    d_normal_d_points[:, :3] = d_normal_d_point_0
+    d_normal_d_points[:, 3:6] = d_normal_d_point_1
+    d_normal_d_points[:, 6:9] = d_normal_d_point_2
+
+
+    temp = (np.eye(3) - np.outer(normal_unit, normal_unit)) / normal_norm
+
+    d_normal_unit_d_points = temp @ d_normal_d_points
+
+
+    cov_points = np.zeros((9, 9))
+    for i in range(3):
+        cov_points[i*3:(i+1)*3, i*3:(i+1)*3] = np.eye(3) * point_stdevs[i]**2
+    cov_normal_unit = d_normal_unit_d_points @ cov_points @ d_normal_unit_d_points.T
+
+    # Get the bounds as the maximum eigenvalue of the covariance matrix
+    eigenvalues = np.linalg.eigvalsh(cov_normal_unit)
+    bound = kNumOfSigmasForBounds*np.sqrt(np.max(eigenvalues))
+
+    return normal_unit,bound
+
+
+
+def normalAngleStdevToBounds(normal_angle_stdev):
+    return np.linalg.norm(np.array([np.sin(np.radians(kNumOfSigmasForBounds*normal_angle_stdev)), 1 - np.cos(np.radians(kNumOfSigmasForBounds*normal_angle_stdev))]))
+
+def getPointCloudNormalsAndBounds(points, point_stdev=0.03):
+    normals = []
+    bounds = []
+    # Create a KDTree for efficient neighbor search
+    tree = KDTree(points)
+    for point in points:
+        # Find the 3 nearest neighbors
+        dists, idxs = tree.query(point, k=3)
+        neighbors = [points[idx] for idx in idxs]
+        normal, bound = pointsToNormalAndBounds(neighbors, point_stdevs=[point_stdev]*3)
+        normals.append(normal)
+        bounds.append(bound)
+    return np.array(normals), np.array(bounds)
+
+def checkCollinearity(normals, min_angle_deg= 5.0):
+    min_angle_rad = np.radians(min_angle_deg)
+    for i in range(len(normals)):
+        for j in range(i+1, len(normals)):
+            normal_b = normals[j]
+            # Flip normal_b to have the smallest angle with normal_a
+            if np.dot(normals[i], normal_b) < 0:
+                normal_b = -normal_b
+            angle = np.arccos(np.clip(np.dot(normals[i], normal_b), -1.0, 1.0))
+            if angle < min_angle_rad or np.abs(angle - np.pi) < min_angle_rad:
+                return True
+    return False
+
+def frobeniusToAngle(frobenius_norm):
+    theta = 2*np.arcsin(frobenius_norm/(2*np.sqrt(2)))
+    return theta
