@@ -2,11 +2,13 @@ from utils import *
 import polyscope as ps
 from scipy.spatial.transform import Rotation as R
 import numpy as np
+from time import time
 
 def main():
-    np.random.seed(42)
+    seed = int((time() * 1000000) % (2**32 - 1))
+    np.random.seed(seed)
     boundsBoilerPlate(distance_type = "point_to_plane", display = False)
-    np.random.seed(42)
+    np.random.seed(seed)
     boundsBoilerPlate(distance_type = "point_to_point", display = False)
 
 
