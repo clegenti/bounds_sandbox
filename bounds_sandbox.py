@@ -40,11 +40,11 @@ def getRotationBounds(points, point_associations, normal_associations, rotation_
 
         # Get the singular values of A
         U, S, Vt = np.linalg.svd(A)
-        s2 = S[1]**2
-        s3 = S[2]**2
+        s2 = S[1]
+        s3 = S[2]
 
         # Compute the bound on the rotation error using the formula derived in the paper
-        bound = np.sqrt(2.0*np.linalg.norm(z) / (s2**2 + s3**2))
+        bound = np.sqrt(2.0*(np.linalg.norm(z)**2) / (s2**2 + s3**2))
 
         min_bound = min(min_bound, bound)
 
@@ -78,11 +78,11 @@ def getRotationBoundsPointToPoint(points, point_associations, rotation_estimate,
 
         # Get the singular values of A
         U, S, Vt = np.linalg.svd(A)
-        s2 = S[1]**2
-        s3 = S[2]**2
+        s2 = S[1]
+        s3 = S[2]
 
         # Compute the bound on the rotation error using the formula derived in the paper
-        bound = np.sqrt(2.0*np.linalg.norm(z) / (s2**2 + s3**2))
+        bound = np.sqrt(2.0*(np.linalg.norm(z)**2) / (s2**2 + s3**2))
 
         min_bound = min(min_bound, bound)
 
