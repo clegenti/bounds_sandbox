@@ -26,6 +26,26 @@ def pointToPlaneRegistration(points, point_associations, normal_associations, ma
     pose[:3, 3] = final_pos
     return pose
 
+def pointToPointRegistration(points, point_associations, max_iterations=100, tolerance=1e-6):
+    # Initialize transformation
+    pos_rot_vec = np.zeros(6)  # 3 for rotation (axis-angle), 3 for translation
+
+    def costFunction(pos_rot_vec):
+        rot = R.from_rotvec(pos_rot_vec[:3]).as_matrix()
+        pos = pos_rot_vec[3:]
+        transformed_points = (rot @ points.T).T + pos
+        residuals = transformed_points - point_associations
+        return residuals.flatten()
+    
+    result = least_squares(costFunction, pos_rot_vec, max_nfev=max_iterations, ftol=tolerance)
+    final_rot = R.from_rotvec(result.x[:3]).as_matrix()
+    final_pos = result.x[3:]
+
+    pose = np.eye(4)
+    pose[:3, :3] = final_rot
+    pose[:3, 3] = final_pos
+    return pose
+
 def normalToNornalResiduals(n1, n2, rotation):
     res_1 = rotation @ n1 - n2
     res_2 = rotation @ n1 + n2
@@ -157,7 +177,7 @@ def checkCollinearity(normals, min_angle_deg= 5.0):
             # Flip normal_b to have the smallest angle with normal_a
             if np.dot(normals[i], normal_b) < 0:
                 normal_b = -normal_b
-            angle = np.arccos(np.clip(np.dot(normals[i], normal_b), -1.0, 1.0))
+            angle = np.arccos(np.clip(np.dot(normals[i], normal_b)/ (np.linalg.norm(normals[i]) * np.linalg.norm(normal_b)), -1.0, 1.0))
             if angle < min_angle_rad or np.abs(angle - np.pi) < min_angle_rad:
                 return True
     return False
@@ -165,3 +185,7 @@ def checkCollinearity(normals, min_angle_deg= 5.0):
 def frobeniusToAngle(frobenius_norm):
     theta = 2*np.arcsin(frobenius_norm/(2*np.sqrt(2)))
     return theta
+
+
+def getBoundFromSigma(sigma):
+    return kNumOfSigmasForBounds*sigma
