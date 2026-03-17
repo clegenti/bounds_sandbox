@@ -55,7 +55,7 @@ def normalToNornalResiduals(n1, n2, rotation):
         return res_2
 
 
-def simulatePlanarScene(num_planes=5, num_point_per_plane=100, point_noise_std=0.03, normal_angle_noise_std=3.0, seed=42):
+def simulatePlanarScene(num_planes=5, num_point_per_plane=100, point_noise_std=0.03, normal_angle_noise_std=3.0):
 
     plane_eqs = []
     for _ in range(num_planes):
@@ -117,6 +117,16 @@ def skewSymmetric(v):
                      [-v[1], v[0], 0]])
 
 
+def getAzElAndJacobian(normal):
+    az = np.arctan2(normal[1], normal[0])
+    el = np.arctan2(normal[2], np.sqrt(normal[0]**2 + normal[1]**2))
+    
+    d_az_d_normal = np.array([-normal[1]/(normal[0]**2 + normal[1]**2), normal[0]/(normal[0]**2 + normal[1]**2), 0])
+    d_el_d_normal = np.array([-normal[0]*normal[2]/(normal[0]**2 + normal[1]**2 + normal[2]**2)/np.sqrt(normal[0]**2 + normal[1]**2), -normal[1]*normal[2]/(normal[0]**2 + normal[1]**2 + normal[2]**2)/np.sqrt(normal[0]**2 + normal[1]**2), np.sqrt(normal[0]**2 + normal[1]**2)/(normal[0]**2 + normal[1]**2 + normal[2]**2)])
+
+    return np.array([az, el]), np.vstack((d_az_d_normal, d_el_d_normal))
+
+
 def pointsToNormalAndBounds(points, point_stdevs = [0.03]*3):
     v1 = points[1] - points[0]
     v2 = points[2] - points[0]
@@ -134,19 +144,28 @@ def pointsToNormalAndBounds(points, point_stdevs = [0.03]*3):
     d_normal_d_points[:, 6:9] = d_normal_d_point_2
 
 
-    temp = (np.eye(3) - np.outer(normal_unit, normal_unit)) / normal_norm
+    #temp = (np.eye(3) - np.outer(normal_unit, normal_unit)) / normal_norm
 
-    d_normal_unit_d_points = temp @ d_normal_d_points
+    #d_normal_unit_d_points = temp @ d_normal_d_points
 
 
     cov_points = np.zeros((9, 9))
     for i in range(3):
         cov_points[i*3:(i+1)*3, i*3:(i+1)*3] = np.eye(3) * point_stdevs[i]**2
-    cov_normal_unit = d_normal_unit_d_points @ cov_points @ d_normal_unit_d_points.T
+        
+    #cov_normal_unit = d_normal_unit_d_points @ cov_points @ d_normal_unit_d_points.T
 
-    # Get the bounds as the maximum eigenvalue of the covariance matrix
-    eigenvalues = np.linalg.eigvalsh(cov_normal_unit)
-    bound = kNumOfSigmasForBounds*np.sqrt(np.max(eigenvalues))
+    ## Get the bounds as the maximum eigenvalue of the covariance matrix
+    #eigenvalues = np.linalg.eigvalsh(cov_normal_unit)
+    #bound = kNumOfSigmasForBounds*np.sqrt(np.max(eigenvalues))
+
+
+    az_el, d_az_el_d_normal = getAzElAndJacobian(normal)
+    cov_az_el = d_az_el_d_normal @ d_normal_d_points @ cov_points @ d_normal_d_points.T @ d_az_el_d_normal.T
+    eigenvalues_az_el = np.linalg.eigvalsh(cov_az_el)
+    bound_az_el = kNumOfSigmasForBounds*np.sqrt(np.max(eigenvalues_az_el))
+    bound = normalAngleStdevToBounds(bound_az_el)
+
 
     return normal_unit,bound
 

@@ -122,6 +122,7 @@ def boundsBoilerPlate(distance_type = "point_to_plane", display = True):
     print("--- Bounds Estimation Results ---")
     print(f"  Rotation bounds: {rotation_bounds:.4f}")
     print(f"  Rotation bounds (degrees): {np.degrees(frobeniusToAngle(rotation_bounds)):.4f}")
+    print(f"  Bound-to-error ratio: {frobeniusToAngle(rotation_bounds)/rot_error:.4f}")
 
     # Show the target and source points in polyscope
     if display:
